@@ -1,0 +1,25 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.rsuser
+.vs/
+.vscode/
+.idea/
+*.swp
+
+## Test results / coverage
+TestResults/
+coverage*.xml
+*.trx
+
+## Local data
+*.db
+*.db-shm
+*.db-wal
+data/
+
+## Publish output
+publish/
+artifacts/
