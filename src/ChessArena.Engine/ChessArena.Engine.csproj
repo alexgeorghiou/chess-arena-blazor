@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ChessArena.Engine</RootNamespace>
+    <Description>Dependency-free chess rules engine: legal move generation, FEN, SAN and PGN.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ChessArena.Engine.Tests" />
+  </ItemGroup>
+
+</Project>
