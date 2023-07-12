@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ChessArena.Engine\ChessArena.Engine.csproj" />
+  </ItemGroup>
+
+</Project>
