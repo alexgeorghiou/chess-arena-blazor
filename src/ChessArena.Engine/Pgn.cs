@@ -70,7 +70,6 @@ public static class PgnWriter
 
         sb.Append('\n');
         AppendMovetext(sb, game, result);
-        sb.Append('\n');
         return sb.ToString();
     }
 
