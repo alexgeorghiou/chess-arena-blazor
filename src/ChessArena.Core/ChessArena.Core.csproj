@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ChessArena.Core</RootNamespace>
+    <Description>Arena domain services: Elo ratings, game clocks and rating-window matchmaking.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ChessArena.Engine\ChessArena.Engine.csproj" />
+  </ItemGroup>
+
+</Project>
