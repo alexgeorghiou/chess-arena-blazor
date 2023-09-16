@@ -18,7 +18,7 @@ coverage*.xml
 *.db
 *.db-shm
 *.db-wal
-data/
+/data/
 
 ## Publish output
 publish/
