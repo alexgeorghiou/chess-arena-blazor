@@ -90,20 +90,42 @@ public sealed class ChessGame
         return new MoveOutcome(true, MoveRejection.None, played);
     }
 
-    public MoveOutcome TryMoveUci(string uci)
+    public MoveOutcome TryMoveUci(string uci) =>
+        TryResolveUci(uci, out var move, out var rejection) ? TryMove(move) : MoveOutcome.Rejected(rejection);
+
+    /// <summary>
+    /// Validates a UCI string against the current position without playing it, so callers can run
+    /// side effects (such as pressing a clock) between validation and execution. A promotion written
+    /// without a piece ("e7e8") defaults to a queen, which is what UIs nearly always mean.
+    /// </summary>
+    public bool TryResolveUci(string uci, out Move move, out MoveRejection rejection)
     {
-        if (!Move.TryParseUci(uci, out var move))
+        rejection = MoveRejection.None;
+        if (IsOver)
         {
-            return MoveOutcome.Rejected(MoveRejection.Malformed);
+            move = default;
+            rejection = MoveRejection.GameOver;
+            return false;
         }
 
-        // Accept "e7e8" for a promotion by defaulting to a queen, which is what UIs nearly always mean.
+        if (!Move.TryParseUci(uci, out move))
+        {
+            rejection = MoveRejection.Malformed;
+            return false;
+        }
+
         if (!move.IsPromotion && LegalMoves.Contains(move with { Promotion = PieceType.Queen }))
         {
             move = move with { Promotion = PieceType.Queen };
         }
 
-        return TryMove(move);
+        if (!LegalMoves.Contains(move))
+        {
+            rejection = MoveRejection.Illegal;
+            return false;
+        }
+
+        return true;
     }
 
     public MoveOutcome TryMoveSan(string san)

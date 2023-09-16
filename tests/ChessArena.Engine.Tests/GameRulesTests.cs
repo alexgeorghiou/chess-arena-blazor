@@ -235,4 +235,17 @@ public class GameRulesTests
         Assert.Equal([2, 3], game.Moves.Select(m => m.Ply));
         Assert.Equal(Color.Black, game.Moves[0].Mover);
     }
+
+    [Fact]
+    public void TryResolveUciValidatesWithoutPlaying()
+    {
+        var game = new ChessGame();
+
+        Assert.True(game.TryResolveUci("e2e4", out var move, out _));
+        Assert.Equal("e2e4", move.ToUci());
+        Assert.Empty(game.Moves);
+
+        Assert.False(game.TryResolveUci("e2e5", out _, out var rejection));
+        Assert.Equal(MoveRejection.Illegal, rejection);
+    }
 }
