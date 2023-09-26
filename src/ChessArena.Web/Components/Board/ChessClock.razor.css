@@ -1,0 +1,16 @@
+.clock {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: #2a2e37;
+  font-variant-numeric: tabular-nums;
+  min-width: 170px;
+}
+
+.clock .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.6; }
+.clock .time { font-size: 28px; font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.clock.running { background: #3d6b3a; }
+.clock.low.running { background: #8f2a2a; }

@@ -1,0 +1,23 @@
+<ol class="moves">
+    @for (var i = 0; i < SanMoves.Count; i += 2)
+    {
+        var whiteIndex = i;
+        <li>
+            <span class="no">@(i / 2 + 1).</span>
+            <span class="san @(whiteIndex == SanMoves.Count - 1 ? "latest" : null)">@SanMoves[whiteIndex]</span>
+            @if (whiteIndex + 1 < SanMoves.Count)
+            {
+                <span class="san @(whiteIndex + 1 == SanMoves.Count - 1 ? "latest" : null)">@SanMoves[whiteIndex + 1]</span>
+            }
+        </li>
+    }
+    @if (SanMoves.Count == 0)
+    {
+        <li class="empty">No moves yet</li>
+    }
+</ol>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<string> SanMoves { get; set; } = [];
+}

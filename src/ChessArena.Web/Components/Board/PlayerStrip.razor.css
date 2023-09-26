@@ -1,0 +1,9 @@
+.player-strip { display: flex; align-items: center; gap: 8px; font-size: 16px; }
+.dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid #888; }
+.dot.white { background: #fafafa; }
+.dot.black { background: #111; }
+.handle { font-weight: 600; }
+.rating { opacity: 0.65; }
+.delta.up { color: #6fd46a; }
+.delta.down { color: #ff6b6b; }
+.you { font-size: 11px; padding: 1px 6px; border-radius: 8px; background: #3a4a7a; text-transform: uppercase; }

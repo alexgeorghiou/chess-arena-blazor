@@ -1,0 +1,27 @@
+<div class="player-strip">
+    <span class="dot @(Color == Color.White ? "white" : "black")"></span>
+    <span class="handle">@Seat.Handle</span>
+    <span class="rating">(@Seat.Rating)</span>
+    @if (RatingDelta is { } delta)
+    {
+        <span class="delta @(delta >= 0 ? "up" : "down")">@(delta >= 0 ? "+" : "")@delta</span>
+    }
+    @if (IsYou)
+    {
+        <span class="you">you</span>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public PlayerSeatDto Seat { get; set; } = default!;
+
+    [Parameter]
+    public Color Color { get; set; }
+
+    [Parameter]
+    public int? RatingDelta { get; set; }
+
+    [Parameter]
+    public bool IsYou { get; set; }
+}

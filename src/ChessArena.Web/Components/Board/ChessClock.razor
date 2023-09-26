@@ -1,0 +1,69 @@
+@implements IDisposable
+@inject TimeProvider Time
+
+<div class="clock @(Running ? "running" : null) @(IsLow ? "low" : null)" data-color="@Label">
+    <span class="label">@Label</span>
+    <span class="time">@Format(Displayed)</span>
+</div>
+
+@code {
+    private ITimer? _timer;
+
+    /// <summary>Remaining time as reported by the server.</summary>
+    [Parameter, EditorRequired]
+    public long Millis { get; set; }
+
+    [Parameter]
+    public bool Running { get; set; }
+
+    /// <summary>Local instant at which <see cref="Millis"/> was received; the clock counts down from it.</summary>
+    [Parameter]
+    public DateTimeOffset SyncedAt { get; set; }
+
+    [Parameter]
+    public string Label { get; set; } = string.Empty;
+
+    internal TimeSpan Displayed
+    {
+        get
+        {
+            var remaining = TimeSpan.FromMilliseconds(Millis);
+            if (Running)
+            {
+                remaining -= Time.GetUtcNow() - SyncedAt;
+            }
+
+            return remaining < TimeSpan.Zero ? TimeSpan.Zero : remaining;
+        }
+    }
+
+    private bool IsLow => Displayed < TimeSpan.FromSeconds(10);
+
+    /// <summary>mm:ss, switching to tenths of a second under ten seconds, like most online clocks.</summary>
+    public static string Format(TimeSpan time)
+    {
+        if (time < TimeSpan.FromSeconds(10))
+        {
+            return $"{time.Seconds}.{time.Milliseconds / 100}";
+        }
+
+        return time.TotalHours >= 1
+            ? $"{(int)time.TotalHours}:{time.Minutes:00}:{time.Seconds:00}"
+            : $"{(int)time.TotalMinutes}:{time.Seconds:00}";
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Running && _timer is null)
+        {
+            _timer = Time.CreateTimer(_ => InvokeAsync(StateHasChanged), null, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(100));
+        }
+        else if (!Running && _timer is not null)
+        {
+            _timer.Dispose();
+            _timer = null;
+        }
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

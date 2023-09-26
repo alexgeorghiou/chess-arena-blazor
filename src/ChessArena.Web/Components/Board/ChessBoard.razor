@@ -1,0 +1,34 @@
+<div class="board @(Interactive ? "interactive" : null)" data-orientation="@Orientation">
+    @foreach (var square in DisplaySquares)
+    {
+        var piece = _position[square];
+        <div class="@SquareClasses(square)" data-square="@square" @onclick="() => OnSquareClickAsync(square)">
+            @if (piece != Piece.None)
+            {
+                <span class="piece @(piece.Color() == Color.White ? "white" : "black")"
+                      title="@piece">@Glyph(piece)</span>
+            }
+            @if (square.File == (Orientation == Color.White ? 0 : 7))
+            {
+                <span class="coord rank">@(square.Rank + 1)</span>
+            }
+            @if (square.Rank == (Orientation == Color.White ? 0 : 7))
+            {
+                <span class="coord file">@((char)('a' + square.File))</span>
+            }
+        </div>
+    }
+
+    @if (_pendingPromotion is not null)
+    {
+        <div class="promotion" role="dialog" aria-label="Choose promotion piece">
+            @foreach (var (letter, type) in PromotionChoices)
+            {
+                <button class="promote" data-piece="@letter" @onclick="() => PromoteAsync(letter)">
+                    @Glyph(type.Of(_position.SideToMove))
+                </button>
+            }
+            <button class="link" @onclick="CancelPromotion">cancel</button>
+        </div>
+    }
+</div>
