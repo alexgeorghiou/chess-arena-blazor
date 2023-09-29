@@ -1,0 +1,30 @@
+@if (Players.Count == 0)
+{
+    <p class="muted">No rated games yet.</p>
+}
+else
+{
+    <table class="grid leaderboard">
+        <thead><tr><th>#</th><th>Player</th><th>Rating</th><th>W / D / L</th></tr></thead>
+        <tbody>
+            @for (var i = 0; i < Players.Count; i++)
+            {
+                var player = Players[i];
+                <tr class="@(player.Id == HighlightId ? "me" : null)">
+                    <td>@(i + 1)</td>
+                    <td>@player.Handle</td>
+                    <td>@player.Rating</td>
+                    <td>@player.Wins / @player.Draws / @player.Losses</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter]
+    public IReadOnlyList<PlayerSummary> Players { get; set; } = [];
+
+    [Parameter]
+    public Guid? HighlightId { get; set; }
+}

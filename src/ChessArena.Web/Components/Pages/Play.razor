@@ -1,0 +1,207 @@
+@page "/game/{GameId:guid}"
+@implements IAsyncDisposable
+@inject PlayerSession Session
+@inject IArenaConnection Arena
+@inject TimeProvider Time
+
+<PageTitle>@Title</PageTitle>
+
+@if (_state is null)
+{
+    <p class="muted">@(_missing ? "This game does not exist or has been archived." : "Loading game...")</p>
+    @if (_missing)
+    {
+        <p><a href="/games">Browse finished games</a></p>
+    }
+}
+else
+{
+    var top = Orientation == Color.White ? Color.Black : Color.White;
+    var bottom = Orientation;
+    <div class="play">
+        <div class="board-column">
+            <div class="seat">
+                <PlayerStrip Seat="SeatOf(top)" Color="top" RatingDelta="DeltaOf(top)" IsYou="_myColor == top" />
+                <ChessClock Millis="MillisOf(top)" Running="IsRunning(top)" SyncedAt="_syncedAt" Label="@top.ToString()" />
+            </div>
+
+            <ChessBoard Fen="@_state.Fen"
+                        Orientation="Orientation"
+                        LegalMoves="MyLegalMoves"
+                        LastMove="@_state.LastMove"
+                        IsCheck="_state.IsCheck"
+                        Interactive="IsMyTurn"
+                        OnMove="MoveAsync" />
+
+            <div class="seat">
+                <PlayerStrip Seat="SeatOf(bottom)" Color="bottom" RatingDelta="DeltaOf(bottom)" IsYou="_myColor == bottom" />
+                <ChessClock Millis="MillisOf(bottom)" Running="IsRunning(bottom)" SyncedAt="_syncedAt" Label="@bottom.ToString()" />
+            </div>
+        </div>
+
+        <aside class="side card">
+            <div class="status">
+                @if (_state.IsOver)
+                {
+                    <GameOverBanner State="_state" />
+                }
+                else if (_myColor is null)
+                {
+                    <span>Spectating - @_state.SideToMove to move</span>
+                }
+                else
+                {
+                    <span>@(IsMyTurn ? "Your move" : "Waiting for opponent")</span>
+                }
+                <span class="muted">@_state.TimeControl - @_state.Spectators watching</span>
+            </div>
+
+            <MoveList SanMoves="_state.SanMoves" />
+
+            @if (_myColor is { } mine && !_state.IsOver)
+            {
+                <div class="actions">
+                    <button @onclick="OfferDrawAsync" disabled="@(_state.DrawOfferedBy == mine.ToString())">
+                        @(_state.DrawOfferedBy is { } by && by != mine.ToString() ? "Accept draw" : "Offer draw")
+                    </button>
+                    <button class="danger" @onclick="ResignAsync">Resign</button>
+                </div>
+                @if (_state.DrawOfferedBy is { } offeredBy && offeredBy != mine.ToString())
+                {
+                    <p class="notice">Your opponent offers a draw.</p>
+                }
+            }
+            @if (_state.IsOver && _state.WhiteRatingDelta is not null)
+            {
+                <a class="button" href="/api/games/@GameId/pgn" download="chessarena-@(GameId).pgn">Download PGN</a>
+            }
+            @if (_error is not null)
+            {
+                <p class="error">@_error</p>
+            }
+        </aside>
+    </div>
+}
+
+@code {
+    private GameStateDto? _state;
+    private DateTimeOffset _syncedAt;
+    private Color? _myColor;
+    private bool _missing;
+    private bool _subscribed;
+    private string? _error;
+
+    [Parameter]
+    public Guid GameId { get; set; }
+
+    private Color Orientation => _myColor ?? Color.White;
+
+    private bool IsMyTurn => _state is { IsOver: false } && _myColor?.ToString() == _state.SideToMove;
+
+    private IReadOnlyList<string> MyLegalMoves => IsMyTurn ? _state!.LegalMoves : [];
+
+    private string Title => _state is null ? "ChessArena" : $"{_state.White.Handle} vs {_state.Black.Handle} - ChessArena";
+
+    protected override void OnInitialized()
+    {
+        Arena.GameUpdated += OnGameUpdated;
+        Session.Changed += OnSessionChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Session.RestoreAsync();
+            await SubscribeAsync();
+        }
+    }
+
+    private async Task SubscribeAsync()
+    {
+        _subscribed = true;
+        try
+        {
+            var state = await Arena.WatchGameAsync(GameId, Session.Current?.Id);
+            _missing = state is null;
+            if (state is not null)
+            {
+                Apply(state);
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not reach the arena: {ex.Message}";
+        }
+
+        StateHasChanged();
+    }
+
+    private void Apply(GameStateDto state)
+    {
+        var wasOver = _state?.IsOver ?? false;
+        _state = state;
+        _syncedAt = Time.GetUtcNow();
+        var me = Session.Current?.Id;
+        _myColor = me == state.White.Id ? Color.White : me == state.Black.Id ? Color.Black : null;
+        if (state.IsOver && !wasOver && state.WhiteRatingDelta is not null)
+        {
+            _ = Session.RefreshAsync();
+        }
+    }
+
+    private Task OnGameUpdated(GameStateDto state)
+    {
+        if (state.GameId != GameId)
+        {
+            return Task.CompletedTask;
+        }
+
+        return InvokeAsync(() =>
+        {
+            Apply(state);
+            StateHasChanged();
+        });
+    }
+
+    private void OnSessionChanged() => InvokeAsync(() =>
+    {
+        if (_subscribed && _state is not null)
+        {
+            Apply(_state);
+            StateHasChanged();
+        }
+    });
+
+    private async Task MoveAsync(string uci) => await RunAsync(id => Arena.MakeMoveAsync(GameId, id, uci));
+
+    private async Task ResignAsync() => await RunAsync(id => Arena.ResignAsync(GameId, id));
+
+    private async Task OfferDrawAsync() => await RunAsync(id => Arena.OfferDrawAsync(GameId, id));
+
+    private async Task RunAsync(Func<Guid, Task<CommandResultDto>> command)
+    {
+        if (Session.Current is not { } me)
+        {
+            return;
+        }
+
+        var result = await command(me.Id);
+        _error = result.Ok ? null : result.Error;
+    }
+
+    private PlayerSeatDto SeatOf(Color color) => color == Color.White ? _state!.White : _state!.Black;
+
+    private long MillisOf(Color color) => color == Color.White ? _state!.WhiteMillis : _state!.BlackMillis;
+
+    private bool IsRunning(Color color) => _state!.ClockRunning == color.ToString();
+
+    private int? DeltaOf(Color color) => color == Color.White ? _state!.WhiteRatingDelta : _state!.BlackRatingDelta;
+
+    public ValueTask DisposeAsync()
+    {
+        Arena.GameUpdated -= OnGameUpdated;
+        Session.Changed -= OnSessionChanged;
+        return ValueTask.CompletedTask;
+    }
+}

@@ -1,0 +1,204 @@
+@page "/"
+@implements IAsyncDisposable
+@inject PlayerSession Session
+@inject IArenaConnection Arena
+@inject IPlayerStore Players
+@inject NavigationManager Navigation
+
+<PageTitle>ChessArena - Lobby</PageTitle>
+
+@if (Session.Current is not { } me)
+{
+    <section class="card signin">
+        <h1>Play chess in real time</h1>
+        <p>Pick a handle to join the lobby. New players start at 1500 Elo.</p>
+        <EditForm Model="_signIn" OnValidSubmit="SignInAsync" FormName="signin">
+            <InputText @bind-Value="_signIn.Handle" placeholder="your handle" maxlength="20" autofocus />
+            <button type="submit" class="primary">Enter lobby</button>
+        </EditForm>
+        @if (_error is not null)
+        {
+            <p class="error">@_error</p>
+        }
+    </section>
+}
+else
+{
+    <h1>Lobby</h1>
+    <div class="lobby">
+        <section class="card">
+            <h2>Quick pairing</h2>
+            <div class="presets">
+                @foreach (var control in Core.Clocks.TimeControl.Presets)
+                {
+                    var text = control.ToString();
+                    <button class="preset @(_seeking == text ? "active" : null)" @onclick="() => SeekAsync(text)" disabled="@(_seeking is not null)">
+                        <strong>@text</strong>
+                        <small>@control.Category</small>
+                    </button>
+                }
+            </div>
+            @if (_seeking is not null)
+            {
+                <p class="seeking">Looking for an opponent near @me.Rating for @_seeking...
+                    <button class="link" @onclick="CancelAsync">cancel</button></p>
+            }
+            @if (_error is not null)
+            {
+                <p class="error">@_error</p>
+            }
+
+            <h3>Open seeks</h3>
+            @if (_lobby is null || _lobby.Seeks.Count == 0)
+            {
+                <p class="muted">Nobody is waiting right now.</p>
+            }
+            else
+            {
+                <table class="grid">
+                    <thead><tr><th>Player</th><th>Rating</th><th>Time</th><th>Waiting</th></tr></thead>
+                    <tbody>
+                        @foreach (var seek in _lobby.Seeks)
+                        {
+                            <tr><td>@seek.Handle</td><td>@seek.Rating</td><td>@seek.TimeControl</td><td>@(seek.WaitingSeconds)s</td></tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+
+        <section class="card">
+            <h2>Live games <small class="muted">@(_lobby?.OnlinePlayers ?? 0) online</small></h2>
+            @if (_lobby is null || _lobby.Games.Count == 0)
+            {
+                <p class="muted">No games in progress.</p>
+            }
+            else
+            {
+                <ul class="live-games">
+                    @foreach (var game in _lobby.Games)
+                    {
+                        <li>
+                            <a href="/game/@game.GameId">@game.White (@game.WhiteRating) vs @game.Black (@game.BlackRating)</a>
+                            <span class="muted">@game.TimeControl - move @(game.Plies / 2 + 1) - @game.Spectators watching</span>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
+        <section class="card">
+            <h2>Leaderboard</h2>
+            <LeaderboardTable Players="_leaders" HighlightId="me.Id" />
+        </section>
+    </div>
+}
+
+@code {
+    private readonly SignInModel _signIn = new();
+    private LobbySnapshotDto? _lobby;
+    private IReadOnlyList<PlayerSummary> _leaders = [];
+    private string? _seeking;
+    private string? _error;
+    private bool _entered;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.Changed += OnSessionChanged;
+        Arena.LobbyUpdated += OnLobbyUpdated;
+        Arena.MatchFound += OnMatchFound;
+        _leaders = await Players.LeaderboardAsync(10);
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender) => EnterLobbyAsync();
+
+    private async Task EnterLobbyAsync()
+    {
+        if (_entered || Session.Current is not { } me)
+        {
+            return;
+        }
+
+        _entered = true;
+        try
+        {
+            _lobby = await Arena.EnterLobbyAsync(me.Id);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not reach the arena: {ex.Message}";
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task SignInAsync()
+    {
+        _error = null;
+        if (!PlayerStore.IsValidHandle(_signIn.Handle?.Trim()))
+        {
+            _error = "Handles are 3-20 letters, digits, '_' or '-'.";
+            return;
+        }
+
+        await Session.SignInAsync(_signIn.Handle!.Trim());
+    }
+
+    private async Task SeekAsync(string timeControl)
+    {
+        _error = null;
+        var result = await Arena.SeekAsync(Session.Current!.Id, timeControl);
+        if (result.Ok)
+        {
+            _seeking = timeControl;
+        }
+        else
+        {
+            _error = result.Error;
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        await Arena.CancelSeekAsync(Session.Current!.Id);
+        _seeking = null;
+    }
+
+    private Task OnLobbyUpdated(LobbySnapshotDto lobby)
+    {
+        _lobby = lobby;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private Task OnMatchFound(MatchFoundDto match) =>
+        InvokeAsync(() => Navigation.NavigateTo($"/game/{match.GameId}"));
+
+    private void OnSessionChanged() => InvokeAsync(async () =>
+    {
+        await EnterLobbyAsync();
+        StateHasChanged();
+    });
+
+    public async ValueTask DisposeAsync()
+    {
+        Session.Changed -= OnSessionChanged;
+        Arena.LobbyUpdated -= OnLobbyUpdated;
+        Arena.MatchFound -= OnMatchFound;
+        if (_seeking is not null && Session.Current is { } me)
+        {
+            try
+            {
+                await Arena.CancelSeekAsync(me.Id);
+            }
+            catch (Exception)
+            {
+                // The circuit is going away; the hub cancels seeks of disconnected players anyway.
+            }
+        }
+    }
+
+    private sealed class SignInModel
+    {
+        public string? Handle { get; set; }
+    }
+}

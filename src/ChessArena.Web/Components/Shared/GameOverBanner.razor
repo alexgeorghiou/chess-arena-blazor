@@ -1,0 +1,32 @@
+<div class="game-over" data-result="@State.Result">
+    <strong>@Headline</strong>
+    <span>@Reason</span>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public GameStateDto State { get; set; } = default!;
+
+    private string Headline => State.Result switch
+    {
+        "1-0" => $"{State.White.Handle} wins",
+        "0-1" => $"{State.Black.Handle} wins",
+        "1/2-1/2" => "Draw",
+        _ => "Game in progress",
+    };
+
+    internal string Reason => State.Termination switch
+    {
+        nameof(Termination.Checkmate) => "by checkmate",
+        nameof(Termination.Resignation) => "by resignation",
+        nameof(Termination.Timeout) => "on time",
+        nameof(Termination.Stalemate) => "by stalemate",
+        nameof(Termination.ThreefoldRepetition) => "by threefold repetition",
+        nameof(Termination.FiftyMoveRule) => "by the fifty-move rule",
+        nameof(Termination.InsufficientMaterial) => "by insufficient material",
+        nameof(Termination.TimeoutVsInsufficientMaterial) => "timeout vs insufficient material",
+        nameof(Termination.DrawAgreement) => "by agreement",
+        nameof(Termination.Abandoned) => "game abandoned",
+        _ => string.Empty,
+    };
+}

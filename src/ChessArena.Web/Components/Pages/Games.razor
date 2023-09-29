@@ -1,0 +1,44 @@
+@page "/games"
+@inject IGameArchive Archive
+
+<PageTitle>ChessArena - Finished games</PageTitle>
+
+<h1>Finished games</h1>
+
+@if (_games is null)
+{
+    <p class="muted">Loading...</p>
+}
+else if (_games.Count == 0)
+{
+    <p class="muted">No games have been finished yet. <a href="/">Play one!</a></p>
+}
+else
+{
+    <table class="grid card">
+        <thead>
+            <tr><th>White</th><th>Black</th><th>Result</th><th>Ending</th><th>Time</th><th>Moves</th><th>Ended (UTC)</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var game in _games)
+            {
+                <tr>
+                    <td>@game.White</td>
+                    <td>@game.Black</td>
+                    <td class="result">@game.Result</td>
+                    <td>@game.Termination</td>
+                    <td>@game.TimeControl</td>
+                    <td>@((game.Plies + 1) / 2)</td>
+                    <td>@game.EndedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                    <td><a href="/api/games/@game.Id/pgn" download="chessarena-@(game.Id).pgn">PGN</a></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private IReadOnlyList<GameListItem>? _games;
+
+    protected override async Task OnInitializedAsync() => _games = await Archive.RecentAsync(50);
+}
