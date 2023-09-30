@@ -34,23 +34,10 @@ public interface IArenaConnection : IAsyncDisposable
 /// this is a server-to-server SignalR connection; it gives components exactly the same protocol and
 /// group semantics as any external client of the hub.
 /// </summary>
-public sealed class ArenaConnection : IArenaConnection
+public sealed class ArenaConnection(NavigationManager navigation, IOptions<ArenaOptions> options) : IArenaConnection
 {
-    private readonly HubConnection _connection;
     private readonly SemaphoreSlim _startLock = new(1, 1);
-
-    public ArenaConnection(NavigationManager navigation, IOptions<ArenaOptions> options)
-    {
-        var baseUri = new Uri(options.Value.HubBaseUrl ?? navigation.BaseUri);
-        _connection = new HubConnectionBuilder()
-            .WithUrl(new Uri(baseUri, ArenaHub.Path.TrimStart('/')))
-            .WithAutomaticReconnect()
-            .Build();
-
-        _connection.On<LobbySnapshotDto>(nameof(IArenaClient.LobbyUpdated), lobby => Raise(LobbyUpdated, lobby));
-        _connection.On<MatchFoundDto>(nameof(IArenaClient.MatchFound), match => Raise(MatchFound, match));
-        _connection.On<GameStateDto>(nameof(IArenaClient.GameUpdated), state => Raise(GameUpdated, state));
-    }
+    private HubConnection? _connection;
 
     public event Func<LobbySnapshotDto, Task>? LobbyUpdated;
 
@@ -66,8 +53,8 @@ public sealed class ArenaConnection : IArenaConnection
 
     public async Task CancelSeekAsync(Guid playerId)
     {
-        await EnsureStartedAsync();
-        await _connection.InvokeAsync(nameof(ArenaHub.CancelSeek), playerId);
+        var connection = await EnsureStartedAsync();
+        await connection.InvokeAsync(nameof(ArenaHub.CancelSeek), playerId);
     }
 
     public Task<GameStateDto?> WatchGameAsync(Guid gameId, Guid? playerId) =>
@@ -84,35 +71,61 @@ public sealed class ArenaConnection : IArenaConnection
 
     public async ValueTask DisposeAsync()
     {
-        await _connection.DisposeAsync();
+        if (_connection is not null)
+        {
+            await _connection.DisposeAsync();
+        }
+
         _startLock.Dispose();
     }
 
     private async Task<T> InvokeAsync<T>(string method, params object?[] args)
     {
-        await EnsureStartedAsync();
-        return await _connection.InvokeCoreAsync<T>(method, args);
+        var connection = await EnsureStartedAsync();
+        return await connection.InvokeCoreAsync<T>(method, args);
     }
 
-    private async Task EnsureStartedAsync()
+    /// <summary>
+    /// Builds and starts the connection on first use. Construction is deferred because the
+    /// navigation base URI is not available while the component tree is being prerendered.
+    /// </summary>
+    private async Task<HubConnection> EnsureStartedAsync()
     {
-        if (_connection.State == HubConnectionState.Connected)
+        if (_connection is { State: HubConnectionState.Connected } connected)
         {
-            return;
+            return connected;
         }
 
         await _startLock.WaitAsync();
         try
         {
+            _connection ??= Build();
             if (_connection.State == HubConnectionState.Disconnected)
             {
                 await _connection.StartAsync();
             }
+
+            return _connection;
         }
         finally
         {
             _startLock.Release();
         }
+    }
+
+    private HubConnection Build()
+    {
+        var configured = options.Value.HubBaseUrl;
+        var baseUri = new Uri(string.IsNullOrWhiteSpace(configured) ? navigation.BaseUri : configured);
+        var connection = new HubConnectionBuilder()
+            .WithUrl(new Uri(baseUri, ArenaHub.Path.TrimStart('/')))
+            .WithAutomaticReconnect()
+            .Build();
+
+        connection.On<LobbySnapshotDto>(nameof(IArenaClient.LobbyUpdated), lobby => Raise(LobbyUpdated, lobby));
+        connection.On<MatchFoundDto>(nameof(IArenaClient.MatchFound), match => Raise(MatchFound, match));
+        connection.On<GameStateDto>(nameof(IArenaClient.GameUpdated), state => Raise(GameUpdated, state));
+        return connection;
     }
 
     private static Task Raise<T>(Func<T, Task>? handlers, T payload) =>
