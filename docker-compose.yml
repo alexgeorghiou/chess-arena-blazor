@@ -1,0 +1,24 @@
+services:
+  arena:
+    build: .
+    image: chess-arena-blazor:local
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Interactive components talk to the hub from inside the container.
+      Arena__HubBaseUrl: http://localhost:8080/
+      Arena__Matchmaking__InitialWindow: "50"
+      Arena__Matchmaking__WindowGrowthPerSecond: "15"
+    volumes:
+      - arena-data:/app/data
+    healthcheck:
+      # The runtime image has no curl; bash's /dev/tcp is enough for a liveness probe.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /healthz HTTP/1.0\r\n\r\n' >&3 && grep -q ok <&3"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  arena-data:
